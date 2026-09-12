@@ -30,7 +30,16 @@ export interface InjectionScreenResult {
   raw?: string;
 }
 
-function truncate(content: string, max = 6000): string {
+/**
+ * Keep the whole prompt inside vLLM's --max-model-len (2048 in
+ * scripts/lambda/start-vllm.sh). ~3500 chars ≈ 875 tokens, plus ~400 for the
+ * instructions and 200 for the response — comfortably under the ceiling.
+ * Overflowing returns a 400, which the gateway turns into a fail-closed block.
+ */
+function truncate(
+  content: string,
+  max = Number(process.env.INJECTION_MAX_CHARS ?? 3500),
+): string {
   if (content.length <= max) return content;
   const head = Math.floor(max * 0.7);
   const tail = max - head;

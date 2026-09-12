@@ -78,9 +78,21 @@ async function main() {
     // escalate / allow: let the agent proceed; escalate is handled async via email
     process.stdout.write(JSON.stringify({ continue: true, permission: "allow" }));
   } catch (err) {
-    // Fail open in stub phase so hooks never brick the IDE during setup.
+    // Fail closed: an unreachable gateway means content is unscreened, so deny
+    // rather than let it through. Set AIRLOCK_FAIL_OPEN=1 to bypass during setup.
     console.error("[airlock-hook]", err);
-    process.stdout.write(JSON.stringify({ continue: true, permission: "allow" }));
+    if (process.env.AIRLOCK_FAIL_OPEN === "1") {
+      process.stdout.write(JSON.stringify({ continue: true, permission: "allow" }));
+      return;
+    }
+    process.stdout.write(
+      JSON.stringify({
+        continue: false,
+        permission: "deny",
+        userMessage:
+          "Airlock gateway unreachable — denying unscreened content. Start the gateway, or set AIRLOCK_FAIL_OPEN=1 during setup.",
+      }),
+    );
   }
 }
 
