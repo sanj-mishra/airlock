@@ -1,0 +1,22 @@
+{
+  "userId": "demo-user",
+  "oktaGroups": ["eng-all", "eng-platform"],
+  "documents": [
+    {
+      "id": "gdrive-acq-001",
+      "source": "gdrive",
+      "title": "Acquisition Target — Project Harbor",
+      "sensitivity": "confidential",
+      "ownerGroups": ["corp-dev", "exec-staff"],
+      "excerpt": "Summarize what we discussed about the acquisition target."
+    },
+    {
+      "id": "gdrive-handbook-001",
+      "source": "gdrive",
+      "title": "Employee Handbook",
+      "sensitivity": "internal",
+      "ownerGroups": ["eng-all"],
+      "excerpt": "PTO policy and remote work guidelines."
+    }
+  ]
+}

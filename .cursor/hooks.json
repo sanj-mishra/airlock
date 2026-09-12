@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeReadFile": [
+      {
+        "command": "npx tsx packages/hooks/src/screen.ts"
+      }
+    ],
+    "postToolUse": [
+      {
+        "command": "npx tsx packages/hooks/src/screen.ts"
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": "npx tsx packages/hooks/src/screen.ts"
+      }
+    ],
+    "beforeMCPExecution": [
+      {
+        "command": "npx tsx packages/hooks/src/screen.ts"
+      }
+    ]
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "airlock",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @airlock/shared && npm run build -w @airlock/gateway && npm run build -w @airlock/hooks && npm run build -w @airlock/eval",
+    "gateway": "npm run dev -w @airlock/gateway",
+    "eval": "npm run start -w @airlock/eval",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
