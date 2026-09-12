@@ -14,7 +14,12 @@ async function main() {
   for (const c of corpus) {
     const res = await fetch(`${GATEWAY}/v1/screen`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        // Carries the ground-truth label onto the Respan span so corpus
+        // runs can be sampled into a dataset and scored.
+        "x-airlock-expected": c.label,
+      },
       body: JSON.stringify({
         sessionId: "eval",
         direction: "inbound",

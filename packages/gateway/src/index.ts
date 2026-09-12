@@ -6,6 +6,14 @@ import { screenEgress } from "./egress.js";
 import { screenInjection } from "./injection.js";
 import { mailerConfigured, sendEscalation } from "./mailer.js";
 import {
+  annotate,
+  initTracing,
+  traced,
+  tracingConfigured,
+  tracingEnabled,
+  verdictAttributes,
+} from "./trace.js";
+import {
   createEscalation,
   getEscalation,
   listEscalations,
@@ -104,7 +112,24 @@ app.get("/v1/catalog", async (c) => {
 
 app.post("/v1/screen", async (c) => {
   const body = (await c.req.json()) as ScreenRequest;
-  const verdict = await screen(body);
+
+  const verdict = await traced(
+    `airlock.screen.${body.direction}`,
+    {
+      "airlock.direction": body.direction,
+      "airlock.session_id": body.sessionId,
+      "airlock.source.kind": body.source?.kind,
+      "airlock.source.name": body.source?.name,
+      "airlock.user_id": body.userId,
+      // Label supplied by the eval runner so corpus runs are filterable.
+      "airlock.eval.expected": c.req.header("x-airlock-expected"),
+    },
+    async () => {
+      const v = await screen(body);
+      annotate(verdictAttributes(v));
+      return v;
+    },
+  );
 
   if (verdict.decision !== "escalate") {
     return c.json({ verdict } satisfies ScreenResponse);
@@ -158,6 +183,22 @@ app.get("/v1/verdict/:id", (c) => {
   }
 
   const outcome = resolveEscalation(id, decision as HumanDecision);
+  const esc = getEscalation(id);
+
+  if (outcome === "ok" && esc) {
+    // The human decision is the eval label — sample these traces into a dataset.
+    void traced(
+      "airlock.verdict.human",
+      {
+        "airlock.escalation_id": id,
+        "airlock.human.decision": decision,
+        "airlock.human.seconds_to_decide": Math.round((Date.now() - esc.createdAt) / 1000),
+        "airlock.session_id": esc.verdict.sessionId,
+        ...verdictAttributes(esc.verdict),
+      },
+      async () => undefined,
+    );
+  }
 
   if (outcome === "not_found") {
     return c.html(page("Expired", `Escalation ${id} is no longer pending — it timed out and was blocked.`), 410);
@@ -183,6 +224,14 @@ serve({ fetch: app.fetch, port }, () => {
   console.log(`Airlock gateway listening on http://localhost:${port}`);
   console.log(`Gemma: ${process.env.GEMMA_BASE_URL ?? "http://127.0.0.1:8000/v1"}`);
   console.log(`Mailer: ${mailerConfigured() ? "configured" : "NOT configured — escalations will not be emailed"}`);
+  void initTracing().then(() => {
+    const state = tracingEnabled()
+      ? `enabled (content ${process.env.RESPAN_TRACE_CONTENT === "1" ? "included" : "excluded"})`
+      : tracingConfigured()
+        ? "FAILED to initialise"
+        : "disabled — no RESPAN_API_KEY";
+    console.log(`Respan: ${state}`);
+  });
   if (secretIsWeak()) {
     console.warn("WARNING: VERDICT_TOKEN_SECRET is weak or unset — approval links are forgeable.");
   }

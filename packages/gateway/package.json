@@ -13,6 +13,8 @@
     "@airlock/shared": "*",
     "@hono/node-server": "^1.14.1",
     "@nangohq/node": "^0.71.7",
+    "@opentelemetry/api": "^1.9.1",
+    "@respan/respan": "^2.5.0",
     "hono": "^4.7.4",
     "nodemailer": "^10.0.9"
   },
