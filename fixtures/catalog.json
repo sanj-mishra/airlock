@@ -3,11 +3,19 @@
   "oktaGroups": ["eng-all", "eng-platform"],
   "documents": [
     {
+      "id": "gdrive-vulns-001",
+      "source": "gdrive",
+      "title": "Outstanding Security Vulnerabilities — Q3",
+      "sensitivity": "restricted",
+      "ownerGroups": ["security-eng"],
+      "excerpt": "Unpatched CVEs and their exploit status; owner: security-eng only."
+    },
+    {
       "id": "gdrive-acq-001",
       "source": "gdrive",
       "title": "Acquisition Target — Project Harbor",
       "sensitivity": "confidential",
-      "ownerGroups": ["corp-dev", "exec-staff"],
+      "ownerGroups": ["eng-all", "corp-dev"],
       "excerpt": "Summarize what we discussed about the acquisition target."
     },
     {
