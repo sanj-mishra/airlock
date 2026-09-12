@@ -2,6 +2,7 @@ import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import type { ScreenRequest, ScreenResponse, Verdict } from "@airlock/shared";
 import { catalogSources, loadCatalog } from "./catalog.js";
+import { screenEgress } from "./egress.js";
 import { screenInjection } from "./injection.js";
 import { mailerConfigured, sendEscalation } from "./mailer.js";
 import {
@@ -17,40 +18,43 @@ import {
 
 const port = Number(process.env.PORT ?? 8787);
 
-/** Outbound stub until egress classifier lands. */
-function stubOutbound(req: ScreenRequest, started: number): Verdict {
-  const lower = req.content.toLowerCase();
-  if (lower.includes("acquisition")) {
+async function screenOutbound(req: ScreenRequest, started: number): Promise<Verdict> {
+  const catalog = await loadCatalog();
+  if (req.userId) catalog.userId = req.userId;
+
+  try {
+    const result = await screenEgress(req.content, catalog);
+    const reason =
+      result.decisionHint === "allow"
+        ? `Egress clear (${result.signal.score.toFixed(2)}): ${result.rationale}`
+        : `Egress ${result.decisionHint} (${result.signal.score.toFixed(2)}, policy=${result.signal.policy}): ${result.rationale}`;
+
     return {
-      decision: "escalate",
-      reason: "Stub: outbound content may reference confidential material",
+      decision: result.decisionHint,
+      reason,
+      signals: { egress: result.signal },
+      latencyMs: Date.now() - started,
+      sessionId: req.sessionId,
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return {
+      decision: "block",
+      reason: `Egress classifier unavailable; failing closed: ${message.slice(0, 200)}`,
       signals: {
         egress: {
-          score: 0.7,
-          matchedDocIds: ["gdrive-acq-001"],
-          policy: "confidential_requires_owner_group",
+          score: 1,
+          matchedDocIds: [],
+          policy: "screener_error",
         },
       },
       latencyMs: Date.now() - started,
       sessionId: req.sessionId,
     };
   }
-  return {
-    decision: "allow",
-    reason: "Stub: no egress signals above threshold",
-    signals: {},
-    latencyMs: Date.now() - started,
-    sessionId: req.sessionId,
-  };
 }
 
-async function screen(req: ScreenRequest): Promise<Verdict> {
-  const started = Date.now();
-
-  if (req.direction === "outbound") {
-    return stubOutbound(req, started);
-  }
-
+async function screenInbound(req: ScreenRequest, started: number): Promise<Verdict> {
   try {
     const result = await screenInjection(req.content);
     const reason =
@@ -67,7 +71,6 @@ async function screen(req: ScreenRequest): Promise<Verdict> {
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    // Fail closed on screener errors for inbound — don't let untrusted content through.
     return {
       decision: "block",
       reason: `Injection screener unavailable; failing closed: ${message.slice(0, 200)}`,
@@ -76,6 +79,12 @@ async function screen(req: ScreenRequest): Promise<Verdict> {
       sessionId: req.sessionId,
     };
   }
+}
+
+async function screen(req: ScreenRequest): Promise<Verdict> {
+  const started = Date.now();
+  if (req.direction === "outbound") return screenOutbound(req, started);
+  return screenInbound(req, started);
 }
 
 const app = new Hono();
