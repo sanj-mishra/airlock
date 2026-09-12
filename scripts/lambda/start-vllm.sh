@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Run ON the Lambda instance. Starts Gemma via vLLM (OpenAI-compatible on :8000).
 # Usage:
-#   export HF_TOKEN=hf_...
+#   export HF_TOKEN=hf_...          # same var as repo .env.example
 #   ./start-vllm.sh
+# Or copy .env onto the box and: set -a && source .env && set +a && ./start-vllm.sh
 # Optional:
 #   MODEL=google/gemma-2-2b-it ./start-vllm.sh          # if 9B OOM on KV cache
 #   MAX_MODEL_LEN=1024 GPU_MEM_UTIL=0.95 ./start-vllm.sh
@@ -17,9 +18,12 @@ CONTAINER_NAME="${CONTAINER_NAME:-airlock-vllm}"
 MAX_MODEL_LEN="${MAX_MODEL_LEN:-2048}"
 GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.95}"
 
-if [[ -z "${HF_TOKEN:-}" ]]; then
+# Prefer HF_TOKEN (.env.example); accept HUGGING_FACE_HUB_TOKEN as alias.
+HF_TOKEN="${HF_TOKEN:-${HUGGING_FACE_HUB_TOKEN:-}}"
+if [[ -z "${HF_TOKEN}" ]]; then
   echo "Set HF_TOKEN to a Hugging Face token with access to ${MODEL}" >&2
   echo "  export HF_TOKEN=hf_..." >&2
+  echo "  (same variable as in the repo .env / .env.example)" >&2
   exit 1
 fi
 

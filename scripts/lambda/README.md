@@ -20,7 +20,7 @@ On the instance:
 
 ```bash
 chmod +x ~/start-vllm.sh
-export HF_TOKEN=hf_...   # Gemma license accepted on Hugging Face
+export HF_TOKEN=hf_...   # from .env.example; accept Gemma license on HF
 ./start-vllm.sh
 ```
 
