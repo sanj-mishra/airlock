@@ -50,25 +50,44 @@ Agree in hour 0, freeze, stub both sides.
 3. Respan API key
 4. Gmail SMTP or Resend — one test mail with a dummy Allow link
 
-### Person A — model + agents
+### Tooling constraint (updated mid-build)
+
+Alex has Gemma **and** Cursor; Sanjana is on Claude Code. Cursor is both the
+intercept surface and the demo surface, so the hook path and demo beats 2–3
+moved to Alex. The adjudicator, Respan spans, and the eval corpus moved to
+Sanjana — all gateway/HTTP work needing neither Cursor nor a local GPU. The
+frozen contracts in `packages/shared` are what make this swap cheap.
+
+### Person A — Alex · model + intercept
 
 | Window | Work |
 | --- | --- |
-| 0:30–1:30 | Gemma on Lambda via vLLM OpenAI API. If stalled at 60m, any open-weight instruct model. |
-| 1:30–2:45 | Injection screener + eval set (~20 inject / ~20 clean / ~10 borderline). |
-| 2:45–3:45 | Egress classifier on `CatalogLookup`; run screeners in parallel. |
-| 3:45–4:15 | Adjudicator + Respan spans. |
+| 0:30–1:30 | Gemma on Lambda via vLLM OpenAI API. **Done** — see `scripts/lambda/`. |
+| 1:30–2:00 | Verify Cursor hook event shapes against `extractContent()`; confirm a block reaches the IDE. |
+| 2:00–3:00 | Injection screener on Gemma. |
+| 3:00–3:45 | Egress classifier on `CatalogLookup`; run screeners in parallel. |
+| 3:45–4:15 | Demo path: poisoned doc + egress deny via `beforeShellExecution`. |
 | 4:15–4:30 | p50/p95 latency for demo. |
 
-### Person B — data + Cursor loop
+### Person B — Sanjana · gateway, decisions, evidence
 
 | Window | Work |
 | --- | --- |
-| 0:30–1:30 | Nango Drive then Okta → `CatalogLookup` (fixture fallback if OAuth burns >45m). |
-| 1:30–2:30 | Gateway: `POST /v1/screen`, `GET /v1/verdict/:id`. |
-| 2:30–3:30 | Cursor hooks + poisoned doc/MCP demo path; deny egress via `beforeShellExecution`. |
+| 0:30–1:30 | Nango Drive → `CatalogLookup`. **Done** — Drive live, Okta served from fixture. |
+| 1:30–2:30 | Gateway: signed `GET /v1/verdict/:id` — HMAC, pending store, resume. |
+| 2:30–3:00 | Adjudicator: combine screener signals → `Verdict`; Respan spans. |
+| 3:00–3:30 | Eval corpus → ~20 inject / ~20 clean / ~10 borderline. |
 | 3:30–4:15 | Email escalate → Allow/Block → Respan eval case. |
-| 4:15–4:30 | Terminal/Respan as live view only if needed. |
+| 4:15–4:30 | Run eval; capture precision/recall for the demo. |
+
+### Demo-day logistics
+
+Cursor hooks call `localhost:8787`, so **the gateway runs on Alex's machine**.
+He needs `NANGO_SECRET_KEY`, `NANGO_DRIVE_CONNECTION_ID`, and the email
+credentials in his own `.env` — gitignored, so share them out of band.
+
+Beat 4 is a two-hander: Alex triggers the borderline action in Cursor, the
+escalation email lands, Sanjana clicks Allow and brings up Respan.
 
 ### Freeze — 4:30–5:00
 
