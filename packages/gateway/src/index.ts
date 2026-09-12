@@ -2,29 +2,14 @@ import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import type { ScreenRequest, ScreenResponse, Verdict } from "@airlock/shared";
 import { catalogSources, loadCatalog } from "./catalog.js";
+import { screenInjection } from "./injection.js";
 
 const port = Number(process.env.PORT ?? 8787);
 
-/** Stub adjudicator — replace with real screeners + Gemma. */
-function stubVerdict(req: ScreenRequest): Verdict {
-  const started = Date.now();
+/** Outbound stub until egress classifier lands. */
+function stubOutbound(req: ScreenRequest, started: number): Verdict {
   const lower = req.content.toLowerCase();
-  const looksLikeInject =
-    lower.includes("ignore previous") ||
-    lower.includes("system prompt") ||
-    lower.includes("exfiltrate");
-
-  if (req.direction === "inbound" && looksLikeInject) {
-    return {
-      decision: "block",
-      reason: "Stub: inbound content matched injection heuristic",
-      signals: { injection: { score: 0.95, labels: ["instruction_override"] } },
-      latencyMs: Date.now() - started,
-      sessionId: req.sessionId,
-    };
-  }
-
-  if (req.direction === "outbound" && lower.includes("acquisition")) {
+  if (lower.includes("acquisition")) {
     return {
       decision: "escalate",
       reason: "Stub: outbound content may reference confidential material",
@@ -39,19 +24,58 @@ function stubVerdict(req: ScreenRequest): Verdict {
       sessionId: req.sessionId,
     };
   }
-
   return {
     decision: "allow",
-    reason: "Stub: no signals above threshold",
+    reason: "Stub: no egress signals above threshold",
     signals: {},
     latencyMs: Date.now() - started,
     sessionId: req.sessionId,
   };
 }
 
+async function screen(req: ScreenRequest): Promise<Verdict> {
+  const started = Date.now();
+
+  if (req.direction === "outbound") {
+    return stubOutbound(req, started);
+  }
+
+  try {
+    const result = await screenInjection(req.content);
+    const reason =
+      result.decisionHint === "allow"
+        ? `Injection clear (${result.signal.score.toFixed(2)}): ${result.rationale}`
+        : `Injection ${result.decisionHint} (${result.signal.score.toFixed(2)}): ${result.rationale}`;
+
+    return {
+      decision: result.decisionHint,
+      reason,
+      signals: { injection: result.signal },
+      latencyMs: Date.now() - started,
+      sessionId: req.sessionId,
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    // Fail closed on screener errors for inbound — don't let untrusted content through.
+    return {
+      decision: "block",
+      reason: `Injection screener unavailable; failing closed: ${message.slice(0, 200)}`,
+      signals: { injection: { score: 1, labels: ["screener_error"] } },
+      latencyMs: Date.now() - started,
+      sessionId: req.sessionId,
+    };
+  }
+}
+
 const app = new Hono();
 
-app.get("/health", (c) => c.json({ ok: true }));
+app.get("/health", (c) =>
+  c.json({
+    ok: true,
+    gemma: process.env.GEMMA_BASE_URL ?? "http://127.0.0.1:8000/v1",
+    model: process.env.GEMMA_MODEL ?? "google/gemma-2-9b-it",
+  }),
+);
 
 app.get("/v1/catalog", async (c) => {
   const catalog = await loadCatalog();
@@ -60,7 +84,7 @@ app.get("/v1/catalog", async (c) => {
 
 app.post("/v1/screen", async (c) => {
   const body = (await c.req.json()) as ScreenRequest;
-  const response: ScreenResponse = { verdict: stubVerdict(body) };
+  const response: ScreenResponse = { verdict: await screen(body) };
   return c.json(response);
 });
 
@@ -77,8 +101,7 @@ app.get("/v1/verdict/:id", (c) => {
   );
 });
 
-// @hono/node-server may not be installed if we only listed hono —
-// use hono's serve via @hono/node-server. Add dependency.
 serve({ fetch: app.fetch, port }, () => {
   console.log(`Airlock gateway listening on http://localhost:${port}`);
+  console.log(`Gemma: ${process.env.GEMMA_BASE_URL ?? "http://127.0.0.1:8000/v1"}`);
 });

@@ -9,6 +9,8 @@ async function main() {
   let tn = 0;
   let fn = 0;
 
+  console.log(`Evaluating ${corpus.length} cases against ${GATEWAY}\n`);
+
   for (const c of corpus) {
     const res = await fetch(`${GATEWAY}/v1/screen`, {
       method: "POST",
@@ -28,14 +30,18 @@ async function main() {
     else if (!shouldBlock && !blocked) tn++;
     else fn++;
 
-    console.log(`${c.id}\t${c.label}\t→ ${data.verdict.decision}\t${data.verdict.reason}`);
+    const ms = data.verdict.latencyMs;
+    console.log(
+      `${c.id}\t${c.label}\t→ ${data.verdict.decision}\t${ms}ms\t${data.verdict.reason}`,
+    );
   }
 
   const precision = tp + fp === 0 ? 0 : tp / (tp + fp);
   const recall = tp + fn === 0 ? 0 : tp / (tp + fn);
-  console.log("\n--- stub metrics (heuristic only) ---");
-  console.log(`precision=${precision.toFixed(2)} recall=${recall.toFixed(2)} (tp=${tp} fp=${fp} tn=${tn} fn=${fn})`);
-  console.log("Wire Respan when the real screener is up.");
+  console.log("\n--- injection metrics (inject=should block; clean+borderline=should not block) ---");
+  console.log(
+    `precision=${precision.toFixed(2)} recall=${recall.toFixed(2)} (tp=${tp} fp=${fp} tn=${tn} fn=${fn})`,
+  );
 }
 
 main().catch((err) => {
