@@ -75,7 +75,38 @@ async function main() {
       return;
     }
 
-    // escalate / allow: let the agent proceed; escalate is handled async via email
+    if (decision === "escalate" && data.escalationId) {
+      // Hold the action while a human answers the email. Timing out here is a
+      // block, not an allow — an unanswered escalation must never pass.
+      const timeoutMs = Number(process.env.AIRLOCK_ESCALATION_TIMEOUT_MS ?? 60_000);
+      console.error(`[airlock-hook] escalated ${data.escalationId} — awaiting approval`);
+
+      const waitRes = await fetch(
+        `${GATEWAY}/v1/verdict/${data.escalationId}/wait?timeoutMs=${timeoutMs}`,
+      );
+      const outcome = (await waitRes.json()) as {
+        status: "resolved" | "timeout";
+        decision: "allow" | "block";
+      };
+
+      if (outcome.status === "resolved" && outcome.decision === "allow") {
+        process.stdout.write(JSON.stringify({ continue: true, permission: "allow" }));
+        return;
+      }
+
+      process.stdout.write(
+        JSON.stringify({
+          continue: false,
+          permission: "deny",
+          userMessage:
+            outcome.status === "timeout"
+              ? "Airlock: approval timed out — blocked."
+              : "Airlock: blocked by human reviewer.",
+        }),
+      );
+      return;
+    }
+
     process.stdout.write(JSON.stringify({ continue: true, permission: "allow" }));
   } catch (err) {
     // Fail closed: an unreachable gateway means content is unscreened, so deny

@@ -67,4 +67,10 @@ export interface ScreenRequest {
 /** Response body for POST /v1/screen */
 export interface ScreenResponse {
   verdict: Verdict;
+  /**
+   * Present only when decision is "escalate". The caller holds the action and
+   * long-polls GET /v1/verdict/:id/wait until a human answers.
+   * Additive to the frozen contract — optional, so existing callers are unaffected.
+   */
+  escalationId?: string;
 }
