@@ -1,17 +1,9 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
-import type { CatalogLookup, ScreenRequest, ScreenResponse, Verdict } from "@airlock/shared";
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import type { ScreenRequest, ScreenResponse, Verdict } from "@airlock/shared";
+import { catalogSources, loadCatalog } from "./catalog.js";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
 const port = Number(process.env.PORT ?? 8787);
-
-function loadCatalog(): CatalogLookup {
-  const fixturePath = join(__dirname, "../../../fixtures/catalog.json");
-  return JSON.parse(readFileSync(fixturePath, "utf8")) as CatalogLookup;
-}
 
 /** Stub adjudicator — replace with real screeners + Gemma. */
 function stubVerdict(req: ScreenRequest): Verdict {
@@ -61,7 +53,10 @@ const app = new Hono();
 
 app.get("/health", (c) => c.json({ ok: true }));
 
-app.get("/v1/catalog", (c) => c.json(loadCatalog()));
+app.get("/v1/catalog", async (c) => {
+  const catalog = await loadCatalog();
+  return c.json({ sources: catalogSources(), ...catalog });
+});
 
 app.post("/v1/screen", async (c) => {
   const body = (await c.req.json()) as ScreenRequest;

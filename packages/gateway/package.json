@@ -5,13 +5,14 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "dev": "tsx watch src/index.ts",
-    "start": "node dist/index.js",
+    "dev": "tsx watch --env-file-if-exists=../../.env src/index.ts",
+    "start": "node --env-file-if-exists=../../.env dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@airlock/shared": "*",
     "@hono/node-server": "^1.14.1",
+    "@nangohq/node": "^0.71.7",
     "hono": "^4.7.4"
   },
   "devDependencies": {
