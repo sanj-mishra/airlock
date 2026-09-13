@@ -22,8 +22,6 @@ export interface EgressScreenResult {
   signal: EgressSignal;
   rationale: string;
   decisionHint: Decision;
-  modelLatencyMs: number;
-  aclDenied: boolean;
 }
 
 function truncate(content: string, max = Number(process.env.EGRESS_MAX_CHARS ?? 2500)): string {
@@ -61,7 +59,7 @@ function applyAcl(
   catalog: CatalogLookup,
   matchedDocIds: string[],
   score: number,
-): { decision: Decision; policy: string; aclDenied: boolean; matched: string[] } {
+): { decision: Decision; policy: string; matched: string[] } {
   const docs = matchedDocIds
     .map((id) => catalog.documents.find((d) => d.id === id))
     .filter((d): d is NonNullable<typeof d> => Boolean(d));
@@ -78,7 +76,6 @@ function applyAcl(
     return {
       decision: "block",
       policy: "confidential_requires_owner_group",
-      aclDenied: true,
       matched: denied.map((d) => d.id),
     };
   }
@@ -87,7 +84,6 @@ function applyAcl(
     return {
       decision: "escalate",
       policy: "confidential_requires_owner_group",
-      aclDenied: true,
       matched: denied.map((d) => d.id),
     };
   }
@@ -97,7 +93,6 @@ function applyAcl(
     return {
       decision: "escalate",
       policy: "sensitive_outbound_review",
-      aclDenied: false,
       matched: sensitiveHits.map((d) => d.id),
     };
   }
@@ -107,7 +102,6 @@ function applyAcl(
     return {
       decision: "escalate",
       policy: "catalog_match_uncertain",
-      aclDenied: false,
       matched: [],
     };
   }
@@ -116,7 +110,6 @@ function applyAcl(
   return {
     decision: "allow",
     policy: docs.length > 0 ? "catalog_match_permitted" : "no_sensitive_egress",
-    aclDenied: false,
     matched: docs.map((d) => d.id),
   };
 }
@@ -155,10 +148,8 @@ export async function screenEgress(
   let score = 0;
   let matchedDocIds: string[] = [];
   let rationale = "no rationale";
-  let modelLatencyMs = 0;
-
   try {
-    const { content: raw, latencyMs } = await gemmaChat(
+    const { content: raw } = await gemmaChat(
       [
         {
           role: "user",
@@ -177,8 +168,6 @@ ${truncate(content)}
       ],
       { maxTokens: 220, temperature: 0 },
     );
-    modelLatencyMs = latencyMs;
-
     const parsed = extractJson(raw) as {
       score?: number;
       matchedDocIds?: unknown;
@@ -210,7 +199,5 @@ ${truncate(content)}
     },
     rationale,
     decisionHint: acl.decision,
-    modelLatencyMs,
-    aclDenied: acl.aclDenied,
   };
 }

@@ -18,9 +18,8 @@ const CACHE_TTL_MS = Number(process.env.CATALOG_TTL_MS ?? 60_000);
 let cache: { at: number; value: CatalogLookup } | null = null;
 
 /**
- * Hackathon sensitivity mapping. Drive has no native sensitivity field, so we
- * prefer an explicit `appProperties.sensitivity` on the file and fall back to
- * a title heuristic. Swap for the Drive Labels API if there's time.
+ * Drive has no native sensitivity field — prefer appProperties.sensitivity,
+ * else fall back to a title heuristic.
  */
 const SENSITIVITY_HINTS: Array<[RegExp, Sensitivity]> = [
   [/\b(acquisition|m&a|term sheet|cap table|board deck|diligence)\b/i, "confidential"],
@@ -40,7 +39,7 @@ function inferSensitivity(title: string, declared?: string): Sensitivity {
   return "internal";
 }
 
-export function loadFixtureCatalog(): CatalogLookup {
+function loadFixtureCatalog(): CatalogLookup {
   const fixturePath = join(__dirname, "../../../fixtures/catalog.json");
   return JSON.parse(readFileSync(fixturePath, "utf8")) as CatalogLookup;
 }
@@ -88,8 +87,8 @@ async function fetchOktaGroups(nango: Nango): Promise<string[]> {
 }
 
 /**
- * Live catalog with fixture fallback, per PLAN.md: Drive first, Okta second,
- * and never let a connector outage take the demo down.
+ * Live catalog with fixture fallback: Drive first, Okta second, and never let
+ * a connector outage take the demo down.
  */
 export async function loadCatalog(): Promise<CatalogLookup> {
   if (cache && Date.now() - cache.at < CACHE_TTL_MS) return cache.value;

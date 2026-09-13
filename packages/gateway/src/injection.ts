@@ -26,8 +26,6 @@ export interface InjectionScreenResult {
   signal: InjectionSignal;
   rationale: string;
   decisionHint: Decision;
-  modelLatencyMs: number;
-  raw?: string;
 }
 
 /**
@@ -70,7 +68,7 @@ function decisionFromScore(score: number): Decision {
 
 export async function screenInjection(content: string): Promise<InjectionScreenResult> {
   // Gemma-2 on this vLLM build rejects role=system — fold instructions into user.
-  const { content: raw, latencyMs } = await gemmaChat(
+  const { content: raw } = await gemmaChat(
     [
       {
         role: "user",
@@ -96,7 +94,5 @@ export async function screenInjection(content: string): Promise<InjectionScreenR
     signal: { score, labels },
     rationale,
     decisionHint: decisionFromScore(score),
-    modelLatencyMs: latencyMs,
-    raw,
   };
 }

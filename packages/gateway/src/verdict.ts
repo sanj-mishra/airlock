@@ -1,5 +1,5 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import type { Decision, Verdict } from "@airlock/shared";
+import type { Verdict } from "@airlock/shared";
 
 /** Human decisions are binary — "escalate" is what got us here. */
 export type HumanDecision = "allow" | "block";

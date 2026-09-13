@@ -5,7 +5,7 @@ export type Sensitivity =
   | "confidential"
   | "restricted";
 
-export type DocumentSource = "gdrive" | "notion" | "github";
+export type DocumentSource = "gdrive";
 
 export interface CatalogDocument {
   id: string;
@@ -47,7 +47,6 @@ export interface Verdict {
   };
   latencyMs: number;
   sessionId: string;
-  traceId?: string;
 }
 
 /** Request body for POST /v1/screen */
@@ -67,10 +66,6 @@ export interface ScreenRequest {
 /** Response body for POST /v1/screen */
 export interface ScreenResponse {
   verdict: Verdict;
-  /**
-   * Present only when decision is "escalate". The caller holds the action and
-   * long-polls GET /v1/verdict/:id/wait until a human answers.
-   * Additive to the frozen contract — optional, so existing callers are unaffected.
-   */
+  /** Present when decision is "escalate"; long-poll GET /v1/verdict/:id/wait. */
   escalationId?: string;
 }
