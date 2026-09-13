@@ -3,22 +3,38 @@
   "hooks": {
     "beforeReadFile": [
       {
-        "command": "npx tsx packages/hooks/src/screen.ts"
+        "command": "npx tsx packages/hooks/src/screen.ts",
+        "failClosed": true,
+        "timeout": 60
+      }
+    ],
+    "preToolUse": [
+      {
+        "command": "npx tsx packages/hooks/src/screen.ts",
+        "matcher": "Read|Task",
+        "failClosed": true,
+        "timeout": 60
       }
     ],
     "postToolUse": [
       {
-        "command": "npx tsx packages/hooks/src/screen.ts"
+        "command": "npx tsx packages/hooks/src/screen.ts",
+        "failClosed": true,
+        "timeout": 60
       }
     ],
     "beforeShellExecution": [
       {
-        "command": "npx tsx packages/hooks/src/screen.ts"
+        "command": "npx tsx packages/hooks/src/screen.ts",
+        "failClosed": true,
+        "timeout": 60
       }
     ],
     "beforeMCPExecution": [
       {
-        "command": "npx tsx packages/hooks/src/screen.ts"
+        "command": "npx tsx packages/hooks/src/screen.ts",
+        "failClosed": true,
+        "timeout": 60
       }
     ]
   }

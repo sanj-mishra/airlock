@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
  * Cursor hook entry: read JSON event from stdin, POST to Airlock gateway, write JSON decision to stdout.
- * Wire from .cursor/hooks.json once screeners are live.
  */
+import { readFileSync } from "node:fs";
 import type { ScreenRequest, ScreenResponse } from "@airlock/shared";
 
 const GATEWAY = process.env.AIRLOCK_URL ?? "http://localhost:8787";
@@ -19,20 +19,76 @@ function extractContent(event: Record<string, unknown>): {
   direction: "inbound" | "outbound";
   content: string;
 } {
-  // Best-effort mapping across hook event shapes; refine per event type.
-  if (typeof event.content === "string") {
-    return { direction: "inbound", content: event.content };
-  }
-  if (typeof event.tool_output === "string") {
-    return { direction: "inbound", content: event.tool_output };
-  }
-  if (typeof event.prompt === "string") {
-    return { direction: "inbound", content: event.prompt };
-  }
+  const hook = String(event.hook_event_name ?? event.event ?? "");
+
   if (typeof event.command === "string") {
     return { direction: "outbound", content: event.command };
   }
+  if (typeof event.content === "string" && event.content.length > 0) {
+    return { direction: "inbound", content: event.content };
+  }
+  if (typeof event.tool_output === "string" && event.tool_output.length > 0) {
+    return { direction: "inbound", content: event.tool_output };
+  }
+  if (typeof event.prompt === "string" && event.prompt.length > 0) {
+    return { direction: "inbound", content: event.prompt };
+  }
+
+  // beforeReadFile / Read: load from disk if payload only has a path
+  const filePath =
+    (typeof event.file_path === "string" && event.file_path) ||
+    (typeof event.path === "string" && event.path) ||
+    (typeof event.filePath === "string" && event.filePath) ||
+    "";
+  if (filePath) {
+    try {
+      return { direction: "inbound", content: readFileSync(filePath, "utf8") };
+    } catch (err) {
+      console.error("[airlock-hook] could not read file_path", filePath, err);
+    }
+  }
+
+  // preToolUse(Read): tool input may nest the path
+  const input = event.tool_input ?? event.input;
+  if (input && typeof input === "object") {
+    const tip = input as Record<string, unknown>;
+    const p = tip.path ?? tip.file_path ?? tip.target_file;
+    if (typeof p === "string") {
+      try {
+        return { direction: "inbound", content: readFileSync(p, "utf8") };
+      } catch (err) {
+        console.error("[airlock-hook] could not read tool path", p, err);
+      }
+    }
+  }
+
+  console.error(
+    "[airlock-hook] fallback stringify; hook=",
+    hook,
+    "keys=",
+    Object.keys(event),
+  );
   return { direction: "inbound", content: JSON.stringify(event) };
+}
+
+function deny(reason: string): never {
+  process.stdout.write(
+    JSON.stringify({
+      permission: "deny",
+      continue: false,
+      user_message: reason,
+      userMessage: reason,
+      agent_message: reason,
+      agentMessage: reason,
+    }),
+  );
+  // Exit 2 = hard block per Cursor hooks docs
+  process.exit(2);
+}
+
+function allow(): never {
+  process.stdout.write(JSON.stringify({ permission: "allow", continue: true }));
+  process.exit(0);
 }
 
 async function main() {
@@ -44,13 +100,18 @@ async function main() {
     event = { raw };
   }
 
+  const hook = String(event.hook_event_name ?? event.event ?? "unknown");
   const { direction, content } = extractContent(event);
+  console.error(
+    `[airlock-hook] ${hook} dir=${direction} bytes=${content.length}`,
+  );
+
   const body: ScreenRequest = {
     sessionId: String(event.session_id ?? event.sessionId ?? "local"),
     direction,
     content,
     source: {
-      kind: String(event.hook_event_name ?? event.event ?? "unknown"),
+      kind: hook,
       name: typeof event.tool_name === "string" ? event.tool_name : undefined,
     },
   };
@@ -63,21 +124,13 @@ async function main() {
     });
     const data = (await res.json()) as ScreenResponse;
     const decision = data.verdict.decision;
+    console.error(`[airlock-hook] decision=${decision} ${data.verdict.reason.slice(0, 120)}`);
 
     if (decision === "block") {
-      process.stdout.write(
-        JSON.stringify({
-          continue: false,
-          permission: "deny",
-          userMessage: data.verdict.reason,
-        }),
-      );
-      return;
+      deny(data.verdict.reason);
     }
 
     if (decision === "escalate" && data.escalationId) {
-      // Hold the action while a human answers the email. Timing out here is a
-      // block, not an allow — an unanswered escalation must never pass.
       const timeoutMs = Number(process.env.AIRLOCK_ESCALATION_TIMEOUT_MS ?? 60_000);
       console.error(`[airlock-hook] escalated ${data.escalationId} — awaiting approval`);
 
@@ -90,39 +143,24 @@ async function main() {
       };
 
       if (outcome.status === "resolved" && outcome.decision === "allow") {
-        process.stdout.write(JSON.stringify({ continue: true, permission: "allow" }));
-        return;
+        allow();
       }
 
-      process.stdout.write(
-        JSON.stringify({
-          continue: false,
-          permission: "deny",
-          userMessage:
-            outcome.status === "timeout"
-              ? "Airlock: approval timed out — blocked."
-              : "Airlock: blocked by human reviewer.",
-        }),
+      deny(
+        outcome.status === "timeout"
+          ? "Airlock: approval timed out — blocked."
+          : "Airlock: blocked by human reviewer.",
       );
-      return;
     }
 
-    process.stdout.write(JSON.stringify({ continue: true, permission: "allow" }));
+    allow();
   } catch (err) {
-    // Fail closed: an unreachable gateway means content is unscreened, so deny
-    // rather than let it through. Set AIRLOCK_FAIL_OPEN=1 to bypass during setup.
     console.error("[airlock-hook]", err);
     if (process.env.AIRLOCK_FAIL_OPEN === "1") {
-      process.stdout.write(JSON.stringify({ continue: true, permission: "allow" }));
-      return;
+      allow();
     }
-    process.stdout.write(
-      JSON.stringify({
-        continue: false,
-        permission: "deny",
-        userMessage:
-          "Airlock gateway unreachable — denying unscreened content. Start the gateway, or set AIRLOCK_FAIL_OPEN=1 during setup.",
-      }),
+    deny(
+      "Airlock gateway unreachable — denying unscreened content. Start the gateway, or set AIRLOCK_FAIL_OPEN=1 during setup.",
     );
   }
 }
