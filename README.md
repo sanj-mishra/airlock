@@ -121,7 +121,9 @@ Defaults (override in `.env`):
 Egress also applies a deterministic ACL: confidential/restricted catalog docs may only leave if the requester’s Okta groups intersect the doc’s `ownerGroups`.
 
 ## Demo
+Demo using Airlock with a Cursor agent. Gmail SMTP is used for notifications, Gemma 2 9B is running on an a100 on a Lambda cloud instance for classification, and the "Project Harbor acquisition" command references a document in Google Drive connected via Nango.
 
+https://github.com/user-attachments/assets/323faac9-8318-4177-8c59-c3d4755a0ac3
 
 
 ## API (gateway)
